@@ -38,7 +38,8 @@ class Worker():
                 'worker_type': self.worker_type,
                 'host': self.augur_config.get_value("Server", "host"),
                 'gh_api_key': self.augur_config.get_value('Database', 'key'),
-                'offline_mode': False
+                'offline_mode': False,
+                'gitlab_api_key': self.augur_config.get_value('Database', 'gitlab_api_key')
             }
         self.config.update(self.augur_config.get_section("Logging"))
 
@@ -279,13 +280,12 @@ class Worker():
 
             if message['job_type'] == 'STOP':
                 break
-
             # If task is not a valid job type
             if message['job_type'] != 'MAINTAIN' and message['job_type'] != 'UPDATE':
                 raise ValueError('{} is not a recognized task type'.format(message['job_type']))
                 pass
 
-            # Query repo_id corresponding to repo url of given task 
+            # Query repo_id corresponding to repo url of given task
             repoUrlSQL = s.sql.text("""
                 SELECT min(repo_id) as repo_id FROM repo WHERE repo_git = '{}'
                 """.format(message['given'][self.given[0][0]]))
@@ -487,7 +487,7 @@ class Worker():
         if platform == 'github':
             cntrb_url = ("https://api.github.com/users/" + login)
         elif platform == 'gitlab':
-            cntrb_url = ("https://gitlab.com/api/v4/users?username=" + login )
+            cntrb_url = ("https://gitlab.com/api/v4/users?username=" + login)
         self.logger.info("Hitting endpoint: {} ...\n".format(cntrb_url))
         r = requests.get(url=cntrb_url, headers=self.headers)
         self.update_rate_limit(r)
@@ -763,6 +763,7 @@ class Worker():
                     self.logger.info(r.links['last']['url'])
                     self.logger.info(platform)
                     self.logger.info("Analyzing page {} of {}\n".format(i, int(last_page) + 1 if last_page is not None else '*last page not known*'))
+        
 
                 try:
                     j = r.json()
@@ -976,8 +977,8 @@ class Worker():
 
         table = 'contributors'
         table_pkey = 'cntrb_id'
-        update_col_map = {'cntrb_email': 'email'}
-        duplicate_col_map = {'cntrb_login': 'email'}
+        update_col_map = {}
+        duplicate_col_map = {'cntrb_email': 'email'}
 
         # list to hold contributors needing insertion or update
         contributors = self.paginate("https://gitlab.com/api/v4/projects/" + url_encoded_format + "/repository/contributors?per_page=100&page={}", duplicate_col_map, update_col_map, table, table_pkey, platform='gitlab')
@@ -1049,7 +1050,7 @@ class Worker():
 
             except Exception as e:
                 self.logger.info("Caught exception: {}".format(e))
-                self.logger.info("Cascading Contributor Anomalie from missing repo contributor data: {} ...\n".format(cntrb_url))
+                self.logger.info("Cascading Contributor Anomalie from missing repo contributor data: {} ...\n".format(cntrb_compressed_url))
                 continue
 
     def record_model_process(self, repo_id, model):
