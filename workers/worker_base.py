@@ -222,7 +222,7 @@ class Worker():
 
         # Organize different api keys/oauths available
         if 'gh_api_key' in self.config or 'gitlab_api_key' in self.config:
-            self.init_oauths(platform=self.platform)
+            self.init_oauths(self.platform)
         else:
             self.oauths = [{'oauth_id': 0}]
 
@@ -677,7 +677,7 @@ class Worker():
             if platform == "github":
                 self.headers = {'Authorization': 'token %s' % oauth['access_token']}
             elif platform == "gitlab":
-                self.headers = {'PRIVATE-TOKEN': oauth['access_token']}
+                self.headers = {'Authorization': 'Bearer %s' % oauth['access_token']}
             self.logger.info("Getting rate limit info for oauth: {}\n".format(oauth))
             response = requests.get(url=url, headers=self.headers)
             self.oauths.append({
@@ -696,8 +696,9 @@ class Worker():
         if platform == "github":
             self.headers = {'Authorization': 'token %s' % self.oauths[0]['access_token']}
         elif platform == "gitlab":
-            self.headers = {'PRIVATE-TOKEN': self.oauths[0]['access_token']}
+            self.headers = {'Authorization': 'Bearer %s' % self.oauths[0]['access_token']}
 
+        self.headers = {'Authorization': 'token %s' % self.oauths[0]['access_token']}
         self.logger.info("OAuth initialized")
 
     def paginate(self, url, duplicate_col_map, update_col_map, table, table_pkey, where_clause="", value_update_col_map={}, platform="github"):
@@ -707,11 +708,11 @@ class Worker():
         :param url: String, the url of the API endpoint we are paginating through, expects
             a curly brace string formatter within the string to format the Integer 
             representing the page number that is wanted to be returned
-        :param duplicate_col_map: Dictionary, maps the field names in our database 
-            to the column names of the source data that should be checked for
-            duplicates (if value in existing database row == source data value, then this
+        :param duplicate_col_map: Dictionary, maps the column names of the source data
+            to the field names in our database for columns that should be checked for
+            duplicates (if source data value == value in existing database row, then this
             element is a duplicate and would not need an insertion). Key is source data 
-            column name, value is database field name. Example: {'gh_issue_id': 'id'}
+            column name, value is database field name. Example: {'id': 'gh_issue_id'}
         :param update_col_map: Dictionary, maps the column names of the source data
             to the field names in our database for columns that should be checked for
             updates (if source data value != value in existing database row, then an
@@ -760,8 +761,6 @@ class Worker():
                         last_page = r.links['last']['url'][-6:].split('=')[1]
                     elif platform == "gitlab":
                         last_page =  r.links['last']['url'].split('&')[2].split("=")[1]
-                    self.logger.info(r.links['last']['url'])
-                    self.logger.info(platform)
                     self.logger.info("Analyzing page {} of {}\n".format(i, int(last_page) + 1 if last_page is not None else '*last page not known*'))
         
 
@@ -781,7 +780,7 @@ class Worker():
                     if j['message'] == 'You have triggered an abuse detection mechanism. Please wait a few minutes before you try again.':
                         num_attempts -= 1
                         self.logger.info("rate limit update code goes here")
-                        self.update_rate_limit(r, temporarily_disable=True, platform=platform)
+                        self.update_rate_limit(r, temporarily_disable=True,platform=platform)
                     if j['message'] == 'Bad credentials':
                         self.logger.info("rate limit update code goes here")
                         self.update_rate_limit(r, bad_credentials=True, platform=platform)
